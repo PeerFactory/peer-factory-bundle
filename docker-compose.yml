@@ -1,0 +1,103 @@
+version: "3.1"
+services:
+
+  influxdb:
+    image: influxdb:latest
+    container_name: influxdb
+    restart: always
+    hostname: influxdb
+    environment:
+      INFLUX_DB: "p2pfactory_db"
+      INFLUXDB_USER: "p2pfactory"
+      INFLUXDB_USER_PASSWORD: "YOUR_INFLUXDB_USER_PASSWORD"
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+ 
+  telegraf:
+    image: telegraf:latest
+    depends_on:
+      - influxdb
+    container_name: telegraf
+    restart: always
+    links:
+      - influxdb:influxdb
+    tty: true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/guard/.telegraf/telegraf.conf:/etc/telegraf/telegraf.conf
+    privileged: true
+ 
+  grafana:
+    image: grafana/grafana:latest
+    depends_on:
+      - influxdb
+    container_name: grafana
+    restart: always
+    ports:
+      - 3000:3000
+    links:
+      - influxdb:influxdb
+    environment:
+      GF_INSTALL_PLUGINS: "abhisant-druid-datasource,alexanderzobnin-zabbix-app,bosun-app,bosun-datasource,briangann-gauge-panel,digiapulssi-breadcrumb-panel,fastweb-openfalcon-datasource,fetzerch-sunandmoon-datasource,foursquare-clouderamanager-datasource,grafana-clock-panel,grafana-influxdb-08-datasource,grafana-kairosdb-datasource,grafana-piechart-panel,grafana-simple-json-datasource,grafana-worldmap-panel,gridprotectionalliance-openhistorian-datasource,gridprotectionalliance-osisoftpi-datasource,hawkular-datasource,jdbranham-diagram-panel,kentik-app,mtanda-heatmap-epoch-panel,mtanda-histogram-panel,ns1-app,percona-percona-app,praj-ams-datasource,rackerlabs-blueflood-datasource,raintank-snap-app,raintank-worldping-app,ryantxu-ajax-panel,savantly-heatmap-panel,sileht-gnocchi-datasource,sraoss-sunburst-panel,stagemonitor-elasticsearch-app,udoprog-heroic-datasource,voxter-app"
+      GF_SECURITY_ADMIN_USER: "p2pfactory"
+      GF_SECURITY_ADMIN_PASSWORD: "YOUR_GRAFANA_SECURITY_ADMIN_PASSWORD"
+    volumes:
+      - grafana-data:/var/lib/grafana
+
+  mqtt:
+    container_name: MQTT
+    restart: always
+    image: eclipse-mosquitto
+    volumes:
+      - /home/gard/.mosquitto/:/mosquitto/config
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+  
+  node-red:
+    depends_on:
+      - mqtt
+    container_name: nodered          
+    image: nodered/node-red:latest
+    restart: always
+    environment:
+      - TZ=Europe/Amsterdam
+    ports:
+      - "1880:1880"
+    volumes:
+      - /home/guard/.nodered/
+
+  mongo:
+    image: mongo
+    container_name: mongo
+    restart: always
+    environment:
+      - MONGO_INITDB_DATABASE=microfactory
+      - MONGO_INITDB_ROOT_USERNAME=mongo_root
+      - MONGO_INITDB_ROOT_PASSWORD=YOUR_MONGO_INITDB_ROOT_PASSWORD
+    volumes:
+      - /home/guard/.mongodb/init-mongo.js:/docker-entrypoint-initidb.d/init-mongo.js:ro
+      - /home/guard/.mongodb/mongo-volume:/data/db
+    ports:
+      - "27017-27019:27017-27019"
+
+  mongo-express:
+    image: mongo-express
+    restart: always
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongo
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_MONGODB_ENABLE_ADMIN=false
+      - ME_CONFIG_MONGODB_AUTH_DATABASE=admin
+      - ME_CONFIG_MONGODB_AUTH_USERNAME=mongo_root
+      - ME_CONFIG_MONGODB_AUTH_PASSWORD=YOUR_MONGODB_AUTH_PASSWORD
+      - ME_CONFIG_BASICAUTH_USERNAME=p2pfactory
+      - ME_CONFIG_BASICAUTH_PASSWORD=YOUR_BASICAUTH_PASSWORD
+    ports:
+      - "8081:8081"
+
+volumes:
+  influxdb-data:
+  grafana-data:
+  mosquitto-data:
+  node-red-data:
